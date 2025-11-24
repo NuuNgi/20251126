@@ -203,6 +203,31 @@ class CloudHarvester:
                     await asyncio.sleep(0.5)
                 except: 
                     pass
+    async def perform_harvest(self):
+        print("🤖 Cloud Harvester: Attempting to trigger request...")
+        if not self.page:
+            return
+
+        try:
+            # ==========================================
+            # 1. 处理“使用条款”弹窗 (Priority Handling)
+            # ==========================================
+            
+            # 定义选择器 (支持中英文)
+            terms_checkbox = 'mat-checkbox:has-text("Accept terms of use"), mat-checkbox:has-text("接受使用条款")'
+            agree_btn = 'button:has-text("Agree"), button:has-text("同意")'
+            dialog_content = 'div.mat-mdc-dialog-content' # 遮挡屏幕的元凶
+
+            # 检测是否有弹窗内容
+            if await self.page.is_visible(dialog_content):
+                print("🧹 Cloud Harvester: Terms Dialog detected.")
+                
+                # 1.1 滚动到底部 (防止无法勾选)
+                try:
+                    await self.page.evaluate(f"document.querySelector('{dialog_content}').scrollTop = document.querySelector('{dialog_content}').scrollHeight")
+                    await asyncio.sleep(0.5)
+                except: 
+                    pass
 
                 # 1.2 勾选复选框
                 if await self.page.is_visible(terms_checkbox):
@@ -222,7 +247,7 @@ class CloudHarvester:
                     # 使用 JS 强制点击，无视遮挡或禁用状态尝试触发
                     await self.page.evaluate(f"""
                         document.querySelectorAll('button:has-text("Agree"), button:has-text("同意")').forEach(b => {{
-                            b.disabled = false; # 强制移除禁用属性(如果还在)
+                            b.disabled = false;
                             b.click();
                         }})
                     """)
@@ -242,9 +267,12 @@ class CloudHarvester:
                 'div[role="dialog"] button:has-text("Close")', 'div[role="dialog"] button:has-text("OK")'
             ]
             for selector in popup_selectors:
-                if await self.page.is_visible(selector):
-                    await self.page.click(selector)
-                    await asyncio.sleep(0.5)
+                try:
+                    if await self.page.is_visible(selector):
+                        await self.page.click(selector)
+                        await asyncio.sleep(0.5)
+                except:
+                    pass
 
             # ==========================================
             # 2. 发送文本 "Hello"
@@ -273,8 +301,6 @@ class CloudHarvester:
             
         except Exception as e:
             print(f"❌ Cloud Harvester: Interaction failed: {e}")
-            # 如果失败，截图保存以便调试 (可选，如果运行在本地)
-            # await self.page.screenshot(path="error_screenshot.png")
 
             for selector in popup_selectors:
                 try:
