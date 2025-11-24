@@ -1050,8 +1050,14 @@ async def main():
     # Make harvester global so admin endpoint can access it
     global harvester
     harvester = None
-    
+       # Check if we should run the cloud harvester
+    # 1. Explicitly enabled via ENABLE_AUTO_HARVEST
+    # 2. Implicitly enabled if GOOGLE_COOKIES is set
+    enable_cloud = os.environ.get("ENABLE_AUTO_HARVEST", "false").lower() == "true"
     if os.environ.get("GOOGLE_COOKIES"):
+        enable_cloud = True
+
+    if enable_cloud:
         try:
             from cloud_harvester import CloudHarvester
             harvester = CloudHarvester(cred_manager)
