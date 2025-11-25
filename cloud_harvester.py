@@ -74,9 +74,9 @@ class CloudHarvester:
                     # Inner Loop
                     while self.is_running and not self.restart_requested:
                         
-                        # A. 自动刷新检测 (Recaptcha token invalid / 401 / 403)
+                        # A. 自动刷新检测 (Recaptcha token invalid / 401 / 403 / Resource Exhausted)
                         if self.refresh_needed:
-                            print("♻️ Cloud Harvester: Token invalid or expired. Refreshing page...")
+                            print("♻️ Cloud Harvester: Token invalid, expired, or resource exhausted. Refreshing page...")
                             try:
                                 await self.page.reload(wait_until="domcontentloaded")
                                 self.refresh_needed = False
@@ -170,7 +170,7 @@ class CloudHarvester:
                     dialog_text = await self.page.inner_text(dialog_selector)
                     # 关键词匹配 (兼顾中英文)
                     exhausted_keywords = [
-                        "Resources exhausted", "资源用尽", "资源耗尽",
+                        "Resources exhausted", "资源用尽", "资源耗尽", 
                         "Quota exceeded", "配额已满", "Capacity reached",
                         "Something went wrong", "出错了" # 宽泛的错误也刷新重试
                     ]
@@ -237,9 +237,26 @@ class CloudHarvester:
                     print("   - Dialog closed.")
                 except: pass
 
-            # 处理普通提示弹窗 (Got it / Close)
+            # 处理普通提示弹窗 (Got it / Close / Dismiss)
             # 这里使用 Playwright 选择器是安全的，因为这些是标准 CSS
-            popup_selectors = ['button[aria-label="Close"]', 'button[aria-label="Dismiss"]', 'button:has-text("Got it")', 'button:has-text("OK")']
+            popup_selectors = [
+                'button[aria-label="Close"]',
+                'button[aria-label="Dismiss"]',
+                'button:has-text("Got it")',
+                'button:has-text("OK")',
+                'button:has-text("Dismiss")' # 针对 "Sign in to continue..." 弹窗
+            ]
+            
+            # 特别检测 "Sign in to continue using Vertex AI" 弹窗
+            try:
+                signin_dialog_text = "Sign in to continue using Vertex AI"
+                if await self.page.is_visible(f'text="{signin_dialog_text}"'):
+                    print(f"⚠️ Cloud Harvester: '{signin_dialog_text}' detected. Clicking Dismiss...")
+                    # 尝试点击 Dismiss 按钮
+                    await self.page.click('button:has-text("Dismiss")')
+                    await asyncio.sleep(1)
+            except: pass
+
             for selector in popup_selectors:
                 try:
                     if await self.page.is_visible(selector):
